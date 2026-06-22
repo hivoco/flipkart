@@ -30,7 +30,7 @@ const nextId = () => `m${++messageId}`;
 
 const RECORD_MAX_MS = 7000; // auto-stop safety net
 // How long the goat speaks / laughs (clip + audio cut here, then crossfades).
-const SPEAK_MS = 4000;
+const SPEAK_MS = 5000;
 const LAUGH_MS = 5000;
 const FINALE_MS = 4500; // goat's closing roast holds long enough to read, then voucher
 const SPEAK_TAKE_COUNT = 1; // single speaking.mp4 take (raise if more are added)
