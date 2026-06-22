@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Flipkart brand palette → generates bg-fk-blue, text-fk-yellow, etc. */
+@theme {
+  --color-fk-blue: #2874f0;
+  --color-fk-blue-dark: #1b4db1;
+  --color-fk-navy: #0d1830;
+  --color-fk-yellow: #ffe11b;
+  --color-fk-gold: #fcd200;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  /* Flipkart sale-night base so there's no flash before the stage paints. */
+  background: #0d1830;
+  color: #ffffff;
+  font-family: var(--font-geist-sans), system-ui, Arial, sans-serif;
+  overflow-x: hidden;
+}
