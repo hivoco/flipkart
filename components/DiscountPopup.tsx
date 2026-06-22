@@ -54,10 +54,12 @@ function Confetti() {
 export function DiscountPopup({
   open,
   onClose,
+  onRestart,
   coupon,
 }: {
   open: boolean;
   onClose: () => void;
+  onRestart: () => void;
   coupon: { code: string; percent: number };
 }) {
   const [gifFailed, setGifFailed] = useState(false);
@@ -127,8 +129,11 @@ export function DiscountPopup({
               <h2 className="mt-1 text-5xl font-extrabold text-fk-blue">
                 {coupon.percent}% OFF
               </h2>
-              <p className="mt-2 text-sm text-slate-500">
-                You out-bleated the goat. Here&apos;s your reward.
+              <p className="mt-3 text-lg font-extrabold text-slate-900">
+                Don&apos;t be dumb-ass. Be a GOAT instead.
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Get {coupon.percent}% Off on your next purchase
               </p>
 
               <button
@@ -153,6 +158,22 @@ export function DiscountPopup({
               </button>
             </div>
           </motion.div>
+
+          {/* Restart lives at the bottom-center of the page, not inside the card. */}
+          <motion.button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestart();
+            }}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ delay: 0.25 }}
+            className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center justify-center gap-2 rounded-full bg-white/15 px-6 py-3 text-sm font-bold text-white shadow-lg ring-1 ring-white/30 backdrop-blur-md transition hover:bg-white/25 active:scale-95"
+          >
+            🔄 Restart the conversation
+          </motion.button>
         </motion.div>
       )}
     </AnimatePresence>

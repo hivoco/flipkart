@@ -43,7 +43,7 @@ export function ChatBox({
   return (
     // No panel/background — just floating text. Bottom-anchored, grows upward,
     // and the top fades out via the mask as new messages arrive.
-    <div className="pointer-events-none fixed bottom-44 right-4 z-30 flex max-h-[48vh] w-[300px] max-w-[80vw] flex-col justify-end gap-2.5 [mask-image:linear-gradient(to_top,#000_72%,transparent)] [-webkit-mask-image:linear-gradient(to_top,#000_72%,transparent)] sm:bottom-28 sm:max-h-[58vh]">
+    <div className="pointer-events-none fixed bottom-44 left-4 z-30 flex max-h-[48vh] w-[300px] max-w-[80vw] flex-col justify-end gap-2.5 [mask-image:linear-gradient(to_top,#000_72%,transparent)] [-webkit-mask-image:linear-gradient(to_top,#000_72%,transparent)] sm:bottom-28 sm:left-auto sm:right-4 sm:max-h-[58vh]">
       <AnimatePresence initial={false}>
         {shown.map((m) => {
           const isGoat = m.sender === "goat";

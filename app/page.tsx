@@ -33,6 +33,7 @@ const RECORD_MAX_MS = 7000; // auto-stop safety net
 const SPEAK_MS = 4000;
 const LAUGH_MS = 5000;
 const FINALE_MS = 4500; // goat's closing roast holds long enough to read, then voucher
+const DIALOG_DELAY_MS = 1000; // goat's subtitle appears ~1s after it starts speaking
 const SPEAK_TAKE_COUNT = 1; // single speaking.mp4 take (raise if more are added)
 
 export default function Home() {
@@ -59,9 +60,10 @@ export default function Home() {
   const busyRef = useRef(false); // guards getUserMedia re-entrancy
   const speakingRef = useRef(false); // true while the goat is speaking a line
   const laughingRef = useRef(false); // true while the goat is laughing
-  // The goat's line is held here while it bleats, then shown in the chat once it
-  // STOPS speaking (so the subtitle lands as the goat finishes, not before).
+  // The goat's line is held here while it bleats, then dropped into the chat a
+  // beat (DIALOG_DELAY_MS) after it STARTS speaking, via its own timer below.
   const pendingGoatRef = useRef<{ gibberish: string; text: string } | null>(null);
+  const dialogTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always-current round, so timers/callbacks never read a stale value.
   const roundRef = useRef(0);
@@ -72,6 +74,7 @@ export default function Home() {
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
+      if (dialogTimer.current) clearTimeout(dialogTimer.current);
     },
     [],
   );
@@ -82,13 +85,24 @@ export default function Home() {
     [],
   );
 
-  // Drop the goat's held-back line into the chat (called the moment it stops
-  // speaking, so the subtitle lands as the bleating ends).
+  // Drop the goat's held-back line into the chat. Idempotent: cancels the reveal
+  // timer and no-ops if the line was already shown.
   const flushGoatLine = () => {
+    if (dialogTimer.current) {
+      clearTimeout(dialogTimer.current);
+      dialogTimer.current = null;
+    }
     const pending = pendingGoatRef.current;
     if (!pending) return;
     pendingGoatRef.current = null;
     addMessage("goat", pending.gibberish, pending.text);
+  };
+
+  // Reveal the goat's line a beat AFTER it starts bleating (not immediately, and
+  // not only when it finishes) — so the subtitle lands while the goat is talking.
+  const revealGoatLineSoon = () => {
+    if (dialogTimer.current) clearTimeout(dialogTimer.current);
+    dialogTimer.current = setTimeout(flushGoatLine, DIALOG_DELAY_MS);
   };
 
   // Goat finished speaking (a speaking video ended, or the safety timer fired).
@@ -97,7 +111,7 @@ export default function Home() {
     if (!speakingRef.current) return;
     speakingRef.current = false;
     if (timer.current) clearTimeout(timer.current);
-    flushGoatLine(); // goat has stopped bleating → show its line now
+    flushGoatLine(); // safety: line is usually already revealed mid-speech
     setGoatState("idle");
     setPhase("awaitMic");
     setProgress((roundRef.current + 0.5) / ROUNDS.length);
@@ -112,7 +126,8 @@ export default function Home() {
     setGoatState("speak");
     pendingGoatRef.current = { gibberish: r.goatGibberish, text: r.goatText };
     speakingRef.current = true;
-    schedule(finishSpeak, SPEAK_MS); // goat speaks ~4s; its line shows when it stops
+    revealGoatLineSoon(); // subtitle drops in ~1s into the goat's speech
+    schedule(finishSpeak, SPEAK_MS); // goat speaks ~4s, then it's your turn
   };
 
   // The goat finished its big laugh at the FINAL user turn (laugh video ended,
@@ -130,9 +145,10 @@ export default function Home() {
     setPhase("goatSpeaking");
     setGoatState("speak");
     speakingRef.current = true;
+    revealGoatLineSoon(); // roast drops in ~1s into the closing speech
     schedule(() => {
       speakingRef.current = false;
-      flushGoatLine(); // roast lands as the goat finishes speaking
+      flushGoatLine(); // safety: ensure the roast is shown before the voucher
       setGoatState("voucher");
       setPhase("finished");
       schedule(() => setShowPopup(true), 2600); // hold the roast so it's readable
@@ -169,6 +185,7 @@ export default function Home() {
     setPhase("goatSpeaking");
     setGoatState("speak");
     speakingRef.current = true;
+    revealGoatLineSoon(); // complaint drops in ~1s into the goat's speech
     schedule(finishSpeak, SPEAK_MS);
   };
 
@@ -242,6 +259,24 @@ export default function Home() {
     startGoatTurn(0);
   };
 
+  // Reset every bit of round state and replay from the goat's opening line.
+  const restartExperience = () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (dialogTimer.current) clearTimeout(dialogTimer.current);
+    speakingRef.current = false;
+    laughingRef.current = false;
+    recordingRef.current = false;
+    pendingGoatRef.current = null;
+    roundRef.current = 0;
+    setShowPopup(false);
+    setMessages([]);
+    setRejectCount(0);
+    setSpeakIndex(0);
+    setProgress(0);
+    setRound(0);
+    startGoatTurn(0);
+  };
+
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[linear-gradient(160deg,#0d1830_0%,#15347e_48%,#2874f0_100%)]">
       {/* Floating Flipkart glow blobs for depth */}
@@ -271,6 +306,7 @@ export default function Home() {
       <DiscountPopup
         open={showPopup}
         onClose={() => setShowPopup(false)}
+        onRestart={restartExperience}
         coupon={COUPON}
       />
     </main>

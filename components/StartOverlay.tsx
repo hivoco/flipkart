@@ -39,7 +39,7 @@ export function StartOverlay({ onStart }: { onStart: () => void }) {
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">
             He speaks fluent <span className="font-semibold">baa</span>. Have a
-            5-round chat in goat language and he&apos;ll judge you into a{" "}
+            3-round chat in goat language and he&apos;ll judge you into a{" "}
             <span className="font-bold text-fk-blue">50% OFF</span> coupon.
           </p>
           <button
