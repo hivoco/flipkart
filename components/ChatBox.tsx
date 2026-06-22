@@ -43,7 +43,7 @@ export function ChatBox({
   return (
     // No panel/background — just floating text. Bottom-anchored, grows upward,
     // and the top fades out via the mask as new messages arrive.
-    <div className="pointer-events-none fixed bottom-44 left-4 z-30 flex max-h-[48vh] w-[300px] max-w-[80vw] flex-col justify-end gap-2.5 [mask-image:linear-gradient(to_top,#000_72%,transparent)] [-webkit-mask-image:linear-gradient(to_top,#000_72%,transparent)] sm:bottom-28 sm:left-auto sm:right-4 sm:max-h-[58vh]">
+    <div className="pointer-events-none fixed bottom-44 left-1/2 z-30 flex max-h-[48vh] w-[300px] max-w-[80vw] -translate-x-1/2 flex-col justify-end gap-2.5 [mask-image:linear-gradient(to_top,#000_72%,transparent)] [-webkit-mask-image:linear-gradient(to_top,#000_72%,transparent)] sm:bottom-28 sm:left-auto sm:right-4 sm:max-h-[58vh] sm:translate-x-0">
       <AnimatePresence initial={false}>
         {shown.map((m) => {
           const isGoat = m.sender === "goat";
@@ -55,7 +55,7 @@ export function ChatBox({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
-              className="text-[13px] leading-snug [text-shadow:0_1px_6px_rgba(0,0,0,0.65)]"
+              className="rounded-xl bg-black/45 px-3 py-2 text-[13px] leading-snug backdrop-blur-sm [text-shadow:0_1px_4px_rgba(0,0,0,0.7)]"
             >
               <span
                 className="font-extrabold"
@@ -66,7 +66,7 @@ export function ChatBox({
               <span className="text-[15px] font-bold leading-snug text-white">
                 {m.text}
               </span>
-              <span className="mt-0.5 block text-[12px] font-normal italic leading-snug text-white/55">
+              <span className="mt-0.5 block text-[12px] font-normal italic leading-snug text-white/70">
                 <Typewriter text={m.gibberish} />
               </span>
             </motion.div>

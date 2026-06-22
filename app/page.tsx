@@ -32,8 +32,8 @@ const RECORD_MAX_MS = 7000; // auto-stop safety net
 // How long the goat speaks / laughs (clip + audio cut here, then crossfades).
 const SPEAK_MS = 4000;
 const LAUGH_MS = 5000;
-const FINALE_MS = 4500; // goat's closing roast holds long enough to read, then voucher
-const DIALOG_DELAY_MS = 1000; // goat's subtitle appears ~1s after it starts speaking
+const FINALE_MS = 2500; // goat's closing roast holds long enough to read, then voucher
+const DIALOG_DELAY_MS = 0; // goat's subtitle appears right as it starts speaking
 const SPEAK_TAKE_COUNT = 1; // single speaking.mp4 take (raise if more are added)
 
 export default function Home() {
@@ -64,6 +64,9 @@ export default function Home() {
   // beat (DIALOG_DELAY_MS) after it STARTS speaking, via its own timer below.
   const pendingGoatRef = useRef<{ gibberish: string; text: string } | null>(null);
   const dialogTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Id of the user's line shown the moment they start "speaking" (recording), so
+  // we can remove it again if that turn is rejected or captured no voice.
+  const userMsgIdRef = useRef<string | null>(null);
 
   // Always-current round, so timers/callbacks never read a stale value.
   const roundRef = useRef(0);
@@ -80,10 +83,22 @@ export default function Home() {
   );
 
   const addMessage = useCallback(
-    (sender: Sender, gibberish: string, text: string) =>
-      setMessages((prev) => [...prev, { id: nextId(), sender, gibberish, text }]),
+    (sender: Sender, gibberish: string, text: string) => {
+      const id = nextId();
+      setMessages((prev) => [...prev, { id, sender, gibberish, text }]);
+      return id;
+    },
     [],
   );
+
+  // Pull the user's line back off screen — their turn was rejected or captured
+  // no voice, so it shouldn't stay (the retry adds a fresh one).
+  const removeUserLine = () => {
+    const id = userMsgIdRef.current;
+    if (!id) return;
+    userMsgIdRef.current = null;
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  };
 
   // Drop the goat's held-back line into the chat. Idempotent: cancels the reveal
   // timer and no-ops if the line was already shown.
@@ -160,8 +175,7 @@ export default function Home() {
   // closing roast; earlier turns skip the laugh and go straight to the goat's
   // next line.
   const acceptUserTurn = () => {
-    const r = ROUNDS[round];
-    addMessage("user", r.userGibberish, r.userText);
+    userMsgIdRef.current = null; // their line is already on screen from record start
 
     if (round >= ROUNDS.length - 1) {
       setPhase("goatLaughing");
@@ -178,6 +192,7 @@ export default function Home() {
 
   // Rejected (they spoke a real language): goat complains, same round again.
   const rejectUserTurn = () => {
+    removeUserLine(); // they didn't actually bleat → drop their premature line
     const reply = NOT_GOAT_REPLIES[rejectCount % NOT_GOAT_REPLIES.length];
     setRejectCount((c) => c + 1);
     setSpeakIndex(Math.floor(Math.random() * SPEAK_TAKE_COUNT));
@@ -199,6 +214,7 @@ export default function Home() {
 
     // Mic captured no voice → nothing to evaluate → back to idle, your turn.
     if (!blob) {
+      removeUserLine();
       setGoatState("idle");
       setPhase("awaitMic");
       return;
@@ -244,6 +260,10 @@ export default function Home() {
       return;
     }
     recordingRef.current = true;
+    // Their line appears right as they start speaking; kept so we can pull it if
+    // the turn is rejected or empty.
+    const r = ROUNDS[roundRef.current];
+    userMsgIdRef.current = addMessage("user", r.userGibberish, r.userText);
     setPhase("userRecording");
     setGoatState("listen");
     schedule(() => void finishRecording(), RECORD_MAX_MS);
@@ -267,6 +287,7 @@ export default function Home() {
     laughingRef.current = false;
     recordingRef.current = false;
     pendingGoatRef.current = null;
+    userMsgIdRef.current = null;
     roundRef.current = 0;
     setShowPopup(false);
     setMessages([]);
