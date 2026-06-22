@@ -3,8 +3,8 @@
 import { AnimatePresence, motion, type Transition, type Variants } from "framer-motion";
 import type { GoatState } from "@/lib/conversation";
 
-// A fully animated CSS/emoji goat used whenever a real goat.riv isn't present
-// (or fails to load). It reacts to the same states as the Rive file.
+// A fully animated CSS/emoji goat used whenever the goat videos fail to load.
+// It reacts to the same states as the video stage.
 
 const bodyVariants: Variants = {
   idle: { rotate: [0, -1.5, 0, 1.5, 0], y: [0, -4, 0], scale: 1 },

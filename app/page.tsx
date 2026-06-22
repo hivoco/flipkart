@@ -7,7 +7,6 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { MicButton } from "@/components/MicButton";
 import { StartOverlay } from "@/components/StartOverlay";
 import { DiscountPopup } from "@/components/DiscountPopup";
-import { useGoatAudio } from "@/lib/useGoatAudio";
 import { useRecorder } from "@/lib/useRecorder";
 import {
   ROUNDS,
@@ -29,19 +28,20 @@ let messageId = 0;
 const nextId = () => `m${++messageId}`;
 
 const RECORD_MAX_MS = 7000; // auto-stop safety net
-// Fallback in case the speaking video's "ended" event never fires (e.g. the
-// file is missing and the CSS goat is shown instead). A little above the clip
-// length so the real video end normally wins.
-const SPEAK_SAFETY_MS = 13000;
+// The goat speaks and laughs for a fixed ~3s each (the clip + its audio is cut
+// at this point and crossfades to the next stage).
+const SPEAK_MS = 3000;
+const LAUGH_MS = 3000;
+const SPEAK_TAKE_COUNT = 3; // random take chosen per speaking turn
 
 export default function Home() {
-  const audio = useGoatAudio();
   const recorder = useRecorder();
 
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [round, setRound] = useState(0);
   const [rejectCount, setRejectCount] = useState(0);
+  const [speakIndex, setSpeakIndex] = useState(0);
   const [goatState, setGoatState] = useState<GoatState>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [progress, setProgress] = useState(0);
@@ -57,6 +57,7 @@ export default function Home() {
   const recordingRef = useRef(false); // true while the mic is live
   const busyRef = useRef(false); // guards getUserMedia re-entrancy
   const speakingRef = useRef(false); // true while the goat is speaking a line
+  const laughingRef = useRef(false); // true while the goat is laughing
 
   // Always-current round, so timers/callbacks never read a stale value.
   const roundRef = useRef(0);
@@ -77,9 +78,8 @@ export default function Home() {
     [],
   );
 
-  // Called when the goat finishes speaking — either the speaking video ended
-  // (its audio is the goat's voice) or the safety timer fired. Then it's the
-  // user's turn. Guarded so video-end + safety can't both fire it.
+  // Goat finished speaking (a speaking video ended, or the safety timer fired).
+  // Hand the turn to the mic. Guarded so the two can't both fire it.
   const finishSpeak = () => {
     if (!speakingRef.current) return;
     speakingRef.current = false;
@@ -89,50 +89,62 @@ export default function Home() {
     setProgress((roundRef.current + 0.5) / ROUNDS.length);
   };
 
-  // Goat speaks round i. The speaking video plays (muted) while the mp3 from
-  // /audio plays; the turn ends when that audio finishes (finishSpeak).
+  // Goat speaks round i: a RANDOM speaking take plays with its own (already
+  // synced) audio; the turn ends when that video finishes (finishSpeak).
   const startGoatTurn = (i: number) => {
     const r = ROUNDS[i];
+    setSpeakIndex(Math.floor(Math.random() * SPEAK_TAKE_COUNT));
     setPhase("goatSpeaking");
     setGoatState("speak");
     addMessage("goat", r.goatGibberish, r.goatText);
     speakingRef.current = true;
-    audio.playGoatSpeak(i, r.goatGibberish).then(finishSpeak);
-    schedule(finishSpeak, SPEAK_SAFETY_MS); // backup if the audio promise hangs
+    schedule(finishSpeak, SPEAK_MS); // goat speaks for ~3s, then it's your turn
   };
 
-  // Accepted (the user bleated like a goat): show their line, laugh, advance.
+  // Goat finished laughing (laugh video ended, or the safety timer). Advance.
+  const finishLaugh = () => {
+    if (!laughingRef.current) return;
+    laughingRef.current = false;
+    if (timer.current) clearTimeout(timer.current);
+    const next = roundRef.current + 1;
+    setProgress(next / ROUNDS.length);
+    if (next < ROUNDS.length) {
+      setRound(next);
+      startGoatTurn(next);
+    } else {
+      setGoatState("voucher");
+      setPhase("finished");
+      schedule(() => setShowPopup(true), 1100);
+    }
+  };
+
+  // Accepted (the user bleated like a goat): show their line, goat laughs
+  // (laugh video + its synced audio), then advance when the laugh finishes.
   const acceptUserTurn = () => {
     const r = ROUNDS[round];
     addMessage("user", r.userGibberish, r.userText);
     setPhase("goatLaughing");
     setGoatState("laugh");
-    audio.playGoatLaugh();
-    schedule(() => {
-      const next = round + 1;
-      setProgress(next / ROUNDS.length);
-      if (next < ROUNDS.length) {
-        setRound(next);
-        startGoatTurn(next);
-      } else {
-        setGoatState("voucher");
-        setPhase("finished");
-        schedule(() => setShowPopup(true), 1100);
-      }
-    }, 1800);
+    laughingRef.current = true;
+    schedule(finishLaugh, LAUGH_MS); // goat laughs for ~3s, then next round
   };
 
   // Rejected (they spoke a real language): goat complains, same round again.
-  // Same video-driven speaking as a normal turn.
   const rejectUserTurn = () => {
     const reply = NOT_GOAT_REPLIES[rejectCount % NOT_GOAT_REPLIES.length];
     setRejectCount((c) => c + 1);
+    setSpeakIndex(Math.floor(Math.random() * SPEAK_TAKE_COUNT));
     addMessage("goat", reply.gibberish, reply.text);
     setPhase("goatSpeaking");
     setGoatState("speak");
     speakingRef.current = true;
-    audio.playGoatSpeak(rejectCount % ROUNDS.length, reply.gibberish).then(finishSpeak);
-    schedule(finishSpeak, SPEAK_SAFETY_MS);
+    schedule(finishSpeak, SPEAK_MS);
+  };
+
+  // Route a clip's "ended" event from the stage to the right handler.
+  const handleClipEnd = (s: GoatState) => {
+    if (s === "speak") finishSpeak();
+    else if (s === "laugh") finishLaugh();
   };
 
   // Stop recording, transcribe with Whisper, classify goat vs. human.
@@ -192,7 +204,6 @@ export default function Home() {
 
   const startExperience = () => {
     setStarted(true);
-    audio.unlock();
     startGoatTurn(0);
   };
 
@@ -213,7 +224,7 @@ export default function Home() {
       {/* The goat stage — 9:16 to match the portrait video clips exactly */}
       <div className="absolute inset-0 flex items-center justify-center pt-14">
         <div className="aspect-9/16 h-[min(80svh,720px)] max-w-[94vw]">
-          <GoatStage state={goatState} />
+          <GoatStage state={goatState} speakIndex={speakIndex} onClipEnd={handleClipEnd} />
         </div>
       </div>
 

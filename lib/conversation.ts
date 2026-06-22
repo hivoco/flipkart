@@ -86,33 +86,3 @@ export const NOT_GOAT_REPLIES: { gibberish: string; text: string }[] = [
 ];
 
 export const COUPON = { code: "GOAT50", percent: 50 };
-
-// ---------------------------------------------------------------------------
-// Rive configuration.
-//
-// Drop your animation at  public/goat.riv  and make sure these names match the
-// State Machine + Inputs inside it. If they don't match (or the file is
-// missing) the app automatically falls back to an animated CSS goat, so the
-// experience always works.
-//
-// Expected inputs:
-//   - speak   : Trigger  (fired each time the goat starts a line)
-//   - listen  : Boolean  (true while the user is talking)
-//   - laugh   : Trigger  (fired when the goat laughs)
-//   - voucher : Trigger  (fired at the very end to open the voucher)
-// ---------------------------------------------------------------------------
-export const RIVE = {
-  src: "/goat.riv",
-  stateMachine: "State Machine 1",
-  inputs: {
-    speak: "speak",
-    listen: "listen",
-    laugh: "laugh",
-    voucher: "voucher",
-  },
-} as const;
-
-/** How long (ms) the goat "speaks" a line, scaled to the length of the line. */
-export function speakDuration(gibberish: string): number {
-  return Math.min(4200, 1400 + gibberish.length * 45);
-}
