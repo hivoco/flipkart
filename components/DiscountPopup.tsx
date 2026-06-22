@@ -130,7 +130,9 @@ export function DiscountPopup({
                 {coupon.percent}% OFF
               </h2>
               <p className="mt-3 text-lg font-extrabold text-slate-900">
-                Don&apos;t be dumb-ass. Be a GOAT instead.
+                Don&apos;t be dumb-ass.
+                <br />
+                Be a GOAT instead.
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-500">
                 Get {coupon.percent}% Off on your next purchase
