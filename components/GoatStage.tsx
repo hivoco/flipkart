@@ -10,20 +10,23 @@ const LISTEN_SRC = "/Goat_Listening.mp4";
 const LAUGH_SRC = "/Goat_Laughing_1.mp4";
 const SPEAK_SRCS = [
   "/Goat_Speaking_1.mp4",
-  "/Goat_Speaking_2.mp4",
-  "/Goat_Speaking_3.mp4",
+  // Disabled for now — only Goat_Speaking_1 is used. Re-add these to randomise
+  // between takes again:
+  // "/Goat_Speaking_2.mp4",
+  // "/Goat_Speaking_3.mp4",
 ];
 
 export const SPEAK_TAKES = SPEAK_SRCS.length;
 
-// "Voiced" clips play ONCE with their own (already-synced) audio and report
-// when they finish via onClipEnd. Everything else is a muted ambient loop.
+// "Voiced" clips carry the goat's own audio, heard only while they're active.
 const VOICED = new Set<string>([...SPEAK_SRCS, LAUGH_SRC]);
-
-// Every clip we mount (idle / listen / laugh + the three speaking takes).
+// Ambient loops keep playing forever so crossfades into them are seamless.
+const AMBIENT = [IDLE_SRC, LISTEN_SRC];
 const ALL_CLIPS = [IDLE_SRC, LISTEN_SRC, LAUGH_SRC, ...SPEAK_SRCS];
 
-const FADE_MS = 450;
+const FADE_MS = 550;
+const UNDER_CLEAR_MS = FADE_MS + 120; // drop the underlay once the new clip is solid
+const PAUSE_MS = FADE_MS + 260; // pause now-hidden voiced clips after that
 
 function clipFor(state: GoatState, speakIndex: number): string {
   switch (state) {
@@ -42,74 +45,87 @@ function clipFor(state: GoatState, speakIndex: number): string {
 export function GoatStage({
   state,
   speakIndex,
-  onClipEnd,
 }: {
   state: GoatState;
   speakIndex: number;
-  onClipEnd?: (state: GoatState) => void;
 }) {
   const activeSrc = clipFor(state, speakIndex);
   const [failed, setFailed] = useState(false);
+  // The previous clip, kept fully opaque UNDER the fading-in one so there's no
+  // mid-crossfade dip/flash.
+  const [underSrc, setUnderSrc] = useState<string | null>(null);
   const refs = useRef<Record<string, HTMLVideoElement | null>>({});
-  const activeSrcRef = useRef(activeSrc);
+  const activeRef = useRef(activeSrc);
 
-  // Enforce mute state directly (React's `muted` prop is unreliable).
+  // Ambient loops run continuously; unlock the voiced clips' audio on the first
+  // gesture (play them unmuted-but-silent so a later unmute produces sound).
   useEffect(() => {
-    for (const src of ALL_CLIPS) {
+    for (const src of AMBIENT) {
       const el = refs.current[src];
-      if (el) el.muted = !VOICED.has(src);
+      if (el) {
+        el.muted = true;
+        el.play().catch(() => {});
+      }
     }
-  }, []);
-
-  // Unlock playback (incl. the voiced clips' audio) on the first user gesture.
-  useEffect(() => {
-    const prime = () => {
-      for (const src of ALL_CLIPS) {
+    const bless = () => {
+      for (const src of VOICED) {
         const el = refs.current[src];
         if (!el) continue;
-        const voiced = VOICED.has(src);
-        if (voiced) el.volume = 0;
-        el.play()
+        el.muted = false;
+        el.volume = 0;
+        el
+          .play()
           .then(() => {
-            // Don't stop a clip that has meanwhile become the active one.
-            if (src !== activeSrcRef.current) {
-              el.pause();
-              el.currentTime = 0;
-            }
-            if (voiced) el.volume = 1;
+            el.volume = 1;
+            const stillActive = src === activeRef.current;
+            el.muted = !stillActive;
+            if (!stillActive) el.pause();
           })
-          .catch(() => {});
+          .catch(() => {
+            el.muted = src !== activeRef.current;
+          });
       }
     };
-    window.addEventListener("pointerdown", prime, { once: true });
-    return () => window.removeEventListener("pointerdown", prime);
+    window.addEventListener("pointerdown", bless, { once: true });
+    return () => window.removeEventListener("pointerdown", bless);
   }, []);
 
-  // Play the active clip from its start; pause the rest after the crossfade.
+  // On a stage change: every clip restarts from the beginning when it becomes
+  // active (the underlay below hides the seek), unmute it if voiced, and keep
+  // the PREVIOUS clip opaque underneath until the new one has fully faded in
+  // (no flash). Hidden voiced clips pause afterwards; idle/listen never pause.
   useEffect(() => {
-    activeSrcRef.current = activeSrc;
-    const el = refs.current[activeSrc];
-    if (el) {
+    const prev = activeRef.current;
+    activeRef.current = activeSrc;
+
+    for (const src of ALL_CLIPS) {
+      const el = refs.current[src];
+      if (el) el.muted = !(src === activeSrc && VOICED.has(src));
+    }
+    const activeEl = refs.current[activeSrc];
+    if (activeEl) {
       try {
-        el.currentTime = 0;
+        activeEl.currentTime = 0; // restart this clip from the start each turn
       } catch {
         /* not seekable yet */
       }
-      if (VOICED.has(activeSrc)) el.volume = 1;
-      el.play().catch(() => {
-        // Unmuted playback blocked → mute so it still plays/animates.
-        if (VOICED.has(activeSrc)) {
-          el.muted = true;
-          el.play().catch(() => {});
-        }
-      });
+      activeEl.play().catch(() => {});
     }
-    const id = setTimeout(() => {
-      for (const src of ALL_CLIPS) {
-        if (src !== activeSrc) refs.current[src]?.pause();
+
+    if (prev !== activeSrc) {
+      // One-time visual sync: hold the outgoing clip under the fade-in.
+      setUnderSrc(prev);
+    }
+    const clearId = setTimeout(() => setUnderSrc(null), UNDER_CLEAR_MS);
+    const pauseId = setTimeout(() => {
+      for (const src of VOICED) {
+        if (src !== activeRef.current) refs.current[src]?.pause();
       }
-    }, FADE_MS + 80);
-    return () => clearTimeout(id);
+    }, PAUSE_MS);
+    return () => {
+      clearTimeout(clearId);
+      clearTimeout(pauseId);
+    };
   }, [activeSrc]);
 
   if (failed) {
@@ -122,25 +138,34 @@ export function GoatStage({
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
-      {ALL_CLIPS.map((src) => (
-        <video
-          key={src}
-          ref={(el) => {
-            refs.current[src] = el;
-          }}
-          src={src}
-          muted={!VOICED.has(src)}
-          loop={!VOICED.has(src)}
-          playsInline
-          preload="auto"
-          onEnded={VOICED.has(src) ? () => onClipEnd?.(state) : undefined}
-          onError={() => setFailed(true)}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity ease-out ${
-            src === activeSrc ? "opacity-100" : "opacity-0"
-          }`}
-          style={{ transitionDuration: `${FADE_MS}ms` }}
-        />
-      ))}
+      {ALL_CLIPS.map((src) => {
+        const isActive = src === activeSrc;
+        const isUnder = !isActive && src === underSrc;
+        // Active fades in on top; the underlay stays solid beneath it; the rest
+        // are hidden. (transition is always present so the fade-in animates.)
+        const layer = isActive
+          ? "z-20 opacity-100"
+          : isUnder
+            ? "z-10 opacity-100"
+            : "z-0 opacity-0";
+        return (
+          <video
+            key={src}
+            ref={(el) => {
+              refs.current[src] = el;
+            }}
+            src={src}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            onError={() => setFailed(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity ease-in-out ${layer}`}
+            style={{ transitionDuration: `${FADE_MS}ms` }}
+          />
+        );
+      })}
     </div>
   );
 }

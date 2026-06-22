@@ -28,11 +28,10 @@ let messageId = 0;
 const nextId = () => `m${++messageId}`;
 
 const RECORD_MAX_MS = 7000; // auto-stop safety net
-// The goat speaks and laughs for a fixed ~3s each (the clip + its audio is cut
-// at this point and crossfades to the next stage).
+// How long the goat speaks / laughs (clip + audio cut here, then crossfades).
 const SPEAK_MS = 3000;
-const LAUGH_MS = 3000;
-const SPEAK_TAKE_COUNT = 3; // random take chosen per speaking turn
+const LAUGH_MS = 5000;
+const SPEAK_TAKE_COUNT = 1; // only Goat_Speaking_1 for now (set to 3 to randomise)
 
 export default function Home() {
   const recorder = useRecorder();
@@ -141,39 +140,41 @@ export default function Home() {
     schedule(finishSpeak, SPEAK_MS);
   };
 
-  // Route a clip's "ended" event from the stage to the right handler.
-  const handleClipEnd = (s: GoatState) => {
-    if (s === "speak") finishSpeak();
-    else if (s === "laugh") finishLaugh();
-  };
-
   // Stop recording, transcribe with Whisper, classify goat vs. human.
   const finishRecording = async () => {
     if (!recordingRef.current) return;
     recordingRef.current = false;
     setPhase("transcribing");
-    setGoatState("idle");
 
     const blob = await recorder.stop();
 
-    let isGoat = true; // default: accept (keeps the flow alive on any failure)
-    if (blob) {
-      try {
-        const fd = new FormData();
-        fd.append("audio", blob, "speech.webm");
-        const controller = new AbortController();
-        const to = setTimeout(() => controller.abort(), 15000);
-        const res = await fetch("/api/transcribe", {
-          method: "POST",
-          body: fd,
-          signal: controller.signal,
-        });
-        clearTimeout(to);
-        const data = await res.json();
-        if (data?.ok && typeof data.isGoat === "boolean") isGoat = data.isGoat;
-      } catch {
-        isGoat = true;
-      }
+    // Mic captured no voice → nothing to evaluate → back to idle, your turn.
+    if (!blob) {
+      setGoatState("idle");
+      setPhase("awaitMic");
+      return;
+    }
+
+    // We have a voice → stay "listening" while we transcribe + evaluate it.
+    // (The goat only leaves the listening pose once it reacts: speak/laugh.)
+    setGoatState("listen");
+
+    let isGoat = true; // default: accept on any failure, to keep the flow alive
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, "speech.webm");
+      const controller = new AbortController();
+      const to = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch("/api/transcribe", {
+        method: "POST",
+        body: fd,
+        signal: controller.signal,
+      });
+      clearTimeout(to);
+      const data = await res.json();
+      if (data?.ok && typeof data.isGoat === "boolean") isGoat = data.isGoat;
+    } catch {
+      isGoat = true;
     }
 
     if (isGoat) acceptUserTurn();
@@ -187,8 +188,10 @@ export default function Home() {
     const ok = await recorder.start();
     busyRef.current = false;
     if (!ok) {
-      // No mic / permission denied → fall back to just accepting.
-      acceptUserTurn();
+      // Mic is off / permission denied → no voice to evaluate. Stay idle and
+      // let the user try again.
+      setGoatState("idle");
+      setPhase("awaitMic");
       return;
     }
     recordingRef.current = true;
@@ -224,7 +227,7 @@ export default function Home() {
       {/* The goat stage — 9:16 to match the portrait video clips exactly */}
       <div className="absolute inset-0 flex items-center justify-center pt-14">
         <div className="aspect-9/16 h-[min(80svh,720px)] max-w-[94vw]">
-          <GoatStage state={goatState} speakIndex={speakIndex} onClipEnd={handleClipEnd} />
+          <GoatStage state={goatState} speakIndex={speakIndex} />
         </div>
       </div>
 
