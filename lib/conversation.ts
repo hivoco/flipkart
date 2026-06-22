@@ -32,39 +32,41 @@ export interface Round {
   userText: string;
 }
 
-/** The 5 conversation rounds. After the 5th, the discount voucher opens. */
+/** The 3 conversation rounds. After the 3rd user turn the goat delivers its
+ *  FINALE roast, then the discount voucher opens. */
 export const ROUNDS: Round[] = [
   {
-    goatGibberish: "Meeehhh baa baa mehhh... Baaa meh meh baa... Meeeeh baa baa.",
-    goatText: "Tell me your cart total. I promise I'll judge quietly.",
-    userGibberish: "Meh baa... Baaa baa baa...",
-    userText: "My cart total is now bigger than my monthly electricity bill.",
+    goatGibberish: "Meeeh blaaa meh blauuu.",
+    goatText:
+      "They say money can't buy happiness. Which is why you're here looking for discounts.",
+    userGibberish: "Blaaa mih baa meeh.",
+    userText:
+      "I have 3 items in my cart. I've been \"researching\" them for 5 weeks.",
   },
   {
-    goatGibberish: "Baaa?! Meh meh baaaaa... meeeh.",
-    goatText: "Bold. Did you at least add the matching socks to soften the damage?",
-    userGibberish: "Meh baa baa... meeeh baa.",
-    userText: "I added three pairs. And a lamp I will absolutely never switch on.",
+    goatGibberish: "Blauuu baa meeh.",
+    goatText: "That's not research. That's a long-distance relationship.",
+    userGibberish: "Meeeh blau mih baa.",
+    userText: "I compare prices across 7 apps. Then buy from Flipkart anyway.",
   },
   {
-    goatGibberish: "Meeeeh baa baa, meh meh baaa.",
-    goatText: "A lamp you'll never use is the most honest purchase a human can make.",
-    userGibberish: "Baa baa meh... meeeeh baa baa.",
-    userText: "There's also a 2 AM phone case shaped like a samosa. Don't ask.",
-  },
-  {
-    goatGibberish: "Meh baa baa baa... MEEEH.",
-    goatText: "Four cases for a phone you've never once dropped. Iconic behaviour.",
-    userGibberish: "Baaa baa meh meh... baa.",
-    userText: "Future me will thank present me. Present me is having a great time.",
-  },
-  {
-    goatGibberish: "Meeeehhh baa baa baa baa!",
-    goatText: "Okay fine — you shopped with your whole heart. The goat is impressed.",
-    userGibberish: "Meh baaa meh meh!",
-    userText: "And roughly my whole wallet. Worth it.",
+    goatGibberish: "Baa meeh blauuu.",
+    goatText: "A beautiful waste of effort. I respect consistency.",
+    userGibberish: "Mih blaaaa meeh baa blauuu.",
+    userText:
+      "I bought a treadmill in 2024. It's currently holding 11 T-shirts, 2 towels, and one life decision I regret.",
   },
 ];
+
+/**
+ * The goat's closing roast. Delivered as a big laugh + final line right after
+ * the 3rd user turn, just before the discount voucher opens.
+ */
+export const FINALE = {
+  goatGibberish: "MEEEEEH BAAA BLAAUUU.",
+  goatText:
+    "Congratulations. You paid ₹29,999 for the world's most expensive clothes rack.",
+};
 
 /**
  * Shown when the user speaks a real human language instead of goat. The goat

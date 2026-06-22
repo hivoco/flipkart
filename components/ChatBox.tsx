@@ -63,11 +63,11 @@ export function ChatBox({
               >
                 {isGoat ? "🐐 Goat" : "🧑 You"}
               </span>{" "}
-              <span className="font-semibold text-white">
-                <Typewriter text={m.gibberish} />
+              <span className="text-[15px] font-bold leading-snug text-white">
+                {m.text}
               </span>
-              <span className="mt-0.5 block text-[11px] italic text-white/70">
-                “{m.text}”
+              <span className="mt-0.5 block text-[12px] font-normal italic leading-snug text-white/55">
+                <Typewriter text={m.gibberish} />
               </span>
             </motion.div>
           );

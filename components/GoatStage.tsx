@@ -7,14 +7,8 @@ import { GoatFallback } from "./GoatFallback";
 // All clips are 720x1280 (9:16).
 const IDLE_SRC = "/Goat_Idle_Waiting.mp4";
 const LISTEN_SRC = "/Goat_Listening.mp4";
-const LAUGH_SRC = "/Goat_Laughing_1.mp4";
-const SPEAK_SRCS = [
-  "/Goat_Speaking_1.mp4",
-  // Disabled for now — only Goat_Speaking_1 is used. Re-add these to randomise
-  // between takes again:
-  // "/Goat_Speaking_2.mp4",
-  // "/Goat_Speaking_3.mp4",
-];
+const LAUGH_SRC = "/laughing.mp4";
+const SPEAK_SRCS = ["/speaking.mp4"];
 
 export const SPEAK_TAKES = SPEAK_SRCS.length;
 

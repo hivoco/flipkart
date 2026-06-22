@@ -1,19 +1,19 @@
 # Assets
 
-The goat is six 9:16 (720×1280) video clips. Replace any in `public/` (keep the
+The goat is four 9:16 (720×1280) video clips. Replace any in `public/` (keep the
 same names) and they take over automatically.
 
 ## Goat videos (required)
 
-| State     | File                       | Notes                                                     |
-| --------- | -------------------------- | --------------------------------------------------------- |
-| Idle      | `Goat_Idle_Waiting.mp4`    | muted loop                                                |
-| Listening | `Goat_Listening.mp4`       | muted loop (while you talk)                               |
-| Speaking  | `Goat_Speaking_1..3.mp4`   | one picked at random per turn; plays with its own audio   |
-| Laughing  | `Goat_Laughing_1.mp4`      | plays with its own audio                                  |
+| State     | File                    | Notes                                |
+| --------- | ----------------------- | ------------------------------------ |
+| Idle      | `Goat_Idle_Waiting.mp4` | muted loop                           |
+| Listening | `Goat_Listening.mp4`    | muted loop (while you talk)          |
+| Speaking  | `speaking.mp4`          | plays with its own audio             |
+| Laughing  | `laughing.mp4`          | plays with its own audio             |
 
 Speaking/laughing clips play **with their own (synced) audio**; idle/listening
-are muted. Speak and laugh are each capped at ~3s in `app/page.tsx`
+are muted. Speaking is capped at ~4s and the laugh at ~5s in `app/page.tsx`
 (`SPEAK_MS` / `LAUGH_MS`). If a video fails to load, an animated CSS goat shows
 instead.
 

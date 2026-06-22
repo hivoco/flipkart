@@ -10,6 +10,7 @@ import { DiscountPopup } from "@/components/DiscountPopup";
 import { useRecorder } from "@/lib/useRecorder";
 import {
   ROUNDS,
+  FINALE,
   COUPON,
   NOT_GOAT_REPLIES,
   type ChatMessage,
@@ -29,9 +30,10 @@ const nextId = () => `m${++messageId}`;
 
 const RECORD_MAX_MS = 7000; // auto-stop safety net
 // How long the goat speaks / laughs (clip + audio cut here, then crossfades).
-const SPEAK_MS = 3000;
+const SPEAK_MS = 4000;
 const LAUGH_MS = 5000;
-const SPEAK_TAKE_COUNT = 1; // only Goat_Speaking_1 for now (set to 3 to randomise)
+const FINALE_MS = 4500; // goat's closing roast holds long enough to read, then voucher
+const SPEAK_TAKE_COUNT = 1; // single speaking.mp4 take (raise if more are added)
 
 export default function Home() {
   const recorder = useRecorder();
@@ -57,6 +59,9 @@ export default function Home() {
   const busyRef = useRef(false); // guards getUserMedia re-entrancy
   const speakingRef = useRef(false); // true while the goat is speaking a line
   const laughingRef = useRef(false); // true while the goat is laughing
+  // The goat's line is held here while it bleats, then shown in the chat once it
+  // STOPS speaking (so the subtitle lands as the goat finishes, not before).
+  const pendingGoatRef = useRef<{ gibberish: string; text: string } | null>(null);
 
   // Always-current round, so timers/callbacks never read a stale value.
   const roundRef = useRef(0);
@@ -77,12 +82,22 @@ export default function Home() {
     [],
   );
 
+  // Drop the goat's held-back line into the chat (called the moment it stops
+  // speaking, so the subtitle lands as the bleating ends).
+  const flushGoatLine = () => {
+    const pending = pendingGoatRef.current;
+    if (!pending) return;
+    pendingGoatRef.current = null;
+    addMessage("goat", pending.gibberish, pending.text);
+  };
+
   // Goat finished speaking (a speaking video ended, or the safety timer fired).
   // Hand the turn to the mic. Guarded so the two can't both fire it.
   const finishSpeak = () => {
     if (!speakingRef.current) return;
     speakingRef.current = false;
     if (timer.current) clearTimeout(timer.current);
+    flushGoatLine(); // goat has stopped bleating → show its line now
     setGoatState("idle");
     setPhase("awaitMic");
     setProgress((roundRef.current + 0.5) / ROUNDS.length);
@@ -95,37 +110,54 @@ export default function Home() {
     setSpeakIndex(Math.floor(Math.random() * SPEAK_TAKE_COUNT));
     setPhase("goatSpeaking");
     setGoatState("speak");
-    addMessage("goat", r.goatGibberish, r.goatText);
+    pendingGoatRef.current = { gibberish: r.goatGibberish, text: r.goatText };
     speakingRef.current = true;
-    schedule(finishSpeak, SPEAK_MS); // goat speaks for ~3s, then it's your turn
+    schedule(finishSpeak, SPEAK_MS); // goat speaks ~4s; its line shows when it stops
   };
 
-  // Goat finished laughing (laugh video ended, or the safety timer). Advance.
+  // The goat finished its big laugh at the FINAL user turn (laugh video ended,
+  // or the safety timer). Deliver the closing roast, then open the voucher.
   const finishLaugh = () => {
     if (!laughingRef.current) return;
     laughingRef.current = false;
     if (timer.current) clearTimeout(timer.current);
-    const next = roundRef.current + 1;
-    setProgress(next / ROUNDS.length);
-    if (next < ROUNDS.length) {
-      setRound(next);
-      startGoatTurn(next);
-    } else {
+    setProgress(1);
+    pendingGoatRef.current = {
+      gibberish: FINALE.goatGibberish,
+      text: FINALE.goatText,
+    };
+    setSpeakIndex(Math.floor(Math.random() * SPEAK_TAKE_COUNT));
+    setPhase("goatSpeaking");
+    setGoatState("speak");
+    speakingRef.current = true;
+    schedule(() => {
+      speakingRef.current = false;
+      flushGoatLine(); // roast lands as the goat finishes speaking
       setGoatState("voucher");
       setPhase("finished");
-      schedule(() => setShowPopup(true), 1100);
-    }
+      schedule(() => setShowPopup(true), 2600); // hold the roast so it's readable
+    }, FINALE_MS);
   };
 
-  // Accepted (the user bleated like a goat): show their line, goat laughs
-  // (laugh video + its synced audio), then advance when the laugh finishes.
+  // Accepted (the user bleated like a goat): show their line. Only the FINAL
+  // user turn makes the goat laugh (laugh video + its synced audio) before the
+  // closing roast; earlier turns skip the laugh and go straight to the goat's
+  // next line.
   const acceptUserTurn = () => {
     const r = ROUNDS[round];
     addMessage("user", r.userGibberish, r.userText);
-    setPhase("goatLaughing");
-    setGoatState("laugh");
-    laughingRef.current = true;
-    schedule(finishLaugh, LAUGH_MS); // goat laughs for ~3s, then next round
+
+    if (round >= ROUNDS.length - 1) {
+      setPhase("goatLaughing");
+      setGoatState("laugh");
+      laughingRef.current = true;
+      schedule(finishLaugh, LAUGH_MS); // big laugh, then the final roast
+    } else {
+      const next = round + 1;
+      setRound(next);
+      setProgress(next / ROUNDS.length);
+      startGoatTurn(next); // no laugh — straight to the goat's next reply
+    }
   };
 
   // Rejected (they spoke a real language): goat complains, same round again.
@@ -133,7 +165,7 @@ export default function Home() {
     const reply = NOT_GOAT_REPLIES[rejectCount % NOT_GOAT_REPLIES.length];
     setRejectCount((c) => c + 1);
     setSpeakIndex(Math.floor(Math.random() * SPEAK_TAKE_COUNT));
-    addMessage("goat", reply.gibberish, reply.text);
+    pendingGoatRef.current = { gibberish: reply.gibberish, text: reply.text };
     setPhase("goatSpeaking");
     setGoatState("speak");
     speakingRef.current = true;
