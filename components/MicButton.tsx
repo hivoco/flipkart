@@ -67,9 +67,11 @@ export function MicButton({
             >
               {[0, 1, 2, 3].map((i) => (
                 <motion.span
+                  // scaleY (GPU transform) instead of height (layout reflow), so
+                  // the equalizer stays smooth on iOS while videos decode.
                   key={i}
-                  className="block w-[3px] rounded-full bg-white"
-                  animate={{ height: [6, 20, 10, 24, 6] }}
+                  className="block h-6 w-[3px] origin-bottom rounded-full bg-white"
+                  animate={{ scaleY: [0.25, 0.85, 0.4, 1, 0.25] }}
                   transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.12 }}
                 />
               ))}

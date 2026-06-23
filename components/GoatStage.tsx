@@ -145,6 +145,17 @@ export function GoatStage({
       activeEl.play().catch(() => {});
     }
 
+    // While idle/listening (not speaking), keep BOTH ambient loops decoded and
+    // running. iOS pauses hidden videos, so otherwise the mic tap has to play the
+    // listen clip from paused — a synchronous decode that hangs the tap. Warming
+    // it here (before the tap) makes the swap just an opacity flip.
+    if (!VOICED.has(activeSrc)) {
+      for (const src of AMBIENT) {
+        const el = refs.current[src];
+        if (el?.paused) el.play().catch(() => {});
+      }
+    }
+
     if (prev !== activeSrc) {
       // One-time visual sync: hold the outgoing clip under the fade-in.
       setUnderSrc(prev);
