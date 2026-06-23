@@ -38,6 +38,22 @@ function clipFor(state: GoatState, speakIndex: number): string {
   }
 }
 
+// WebKit (iOS + desktop Safari) ignores late muting of a playing <video>, so the
+// goat's audio bleeds past the SPEAK_MS/LAUGH_MS cut. On WebKit we pause the
+// outgoing voiced clip IMMEDIATELY (rather than after the crossfade) so its audio
+// stops exactly at the cut and never overlaps the next clip.
+function isWebKit(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const ios =
+    /iP(hone|ad|od)/.test(ua) ||
+    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const safari =
+    /Safari/.test(ua) &&
+    !/Chrome|Chromium|CriOS|FxiOS|Edg|EdgiOS|OPR|OPiOS|Android/.test(ua);
+  return ios || safari;
+}
+
 export function GoatStage({
   state,
   speakIndex,
@@ -123,14 +139,30 @@ export function GoatStage({
       setUnderSrc(prev);
     }
     const clearId = setTimeout(() => setUnderSrc(null), UNDER_CLEAR_MS);
-    const pauseId = setTimeout(() => {
+
+    // Stop the now-inactive voiced clips so their audio can't bleed past the
+    // SPEAK_MS/LAUGH_MS cut. WebKit ignores late muting, so there we pause them
+    // at once; elsewhere we wait out the crossfade for a smoother visual fade.
+    const stopInactiveVoiced = () => {
       for (const src of VOICED) {
-        if (src !== activeRef.current) refs.current[src]?.pause();
+        if (src !== activeRef.current) {
+          const el = refs.current[src];
+          if (el) {
+            el.muted = true;
+            el.pause();
+          }
+        }
       }
-    }, PAUSE_MS);
+    };
+    let pauseId: ReturnType<typeof setTimeout> | undefined;
+    if (isWebKit()) {
+      stopInactiveVoiced();
+    } else {
+      pauseId = setTimeout(stopInactiveVoiced, PAUSE_MS);
+    }
     return () => {
       clearTimeout(clearId);
-      clearTimeout(pauseId);
+      if (pauseId !== undefined) clearTimeout(pauseId);
     };
   }, [activeSrc]);
 
