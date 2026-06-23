@@ -5,10 +5,12 @@ import type { GoatState } from "@/lib/conversation";
 import { GoatFallback } from "./GoatFallback";
 
 // All clips are 720x1280 (9:16).
-const IDLE_SRC = "/Goat_Idle_Waiting.mp4";
-const LISTEN_SRC = "/Goat_Listening.mp4";
-const LAUGH_SRC = "/laughing.mp4";
-const SPEAK_SRCS = ["/speaking.mp4"];
+// -v2 suffix = cache-bust after the clips were re-compressed; bump again if you
+// replace any of these so production/CDN caches don't serve the old file.
+const IDLE_SRC = "/Goat_Idle_Waiting-v2.mp4";
+const LISTEN_SRC = "/Goat_Listening-v2.mp4";
+const LAUGH_SRC = "/laughing-v2.mp4";
+const SPEAK_SRCS = ["/speaking-v2.mp4"];
 
 export const SPEAK_TAKES = SPEAK_SRCS.length;
 

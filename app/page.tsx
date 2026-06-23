@@ -36,7 +36,7 @@ const SPEAK_MS = 4000;
 const LAUGH_MS = 1000;
 const FINALE_MS = 2500; // goat's closing roast holds long enough to read, then voucher
 const DIALOG_DELAY_MS = 1000; // goat's subtitle appears ~1s after it starts speaking
-const SPEAK_TAKE_COUNT = 1; // single speaking.mp4 take (raise if more are added)
+const SPEAK_TAKE_COUNT = 1; // single speaking clip for now (raise if more are added)
 
 export default function Home() {
   const recorder = useRecorder();
