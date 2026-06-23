@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import type { Phase } from "@/lib/conversation";
 
 export function MicButton({
@@ -31,12 +30,22 @@ export function MicButton({
 
   return (
     <div className="fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2">
-      <motion.button
+      <button
         type="button"
-        onClick={clickable ? onTap : undefined}
-        disabled={!clickable}
-        whileTap={clickable ? { scale: 0.9 } : undefined}
-        className={`relative flex h-16 w-16 items-center justify-center rounded-full text-2xl shadow-xl transition-colors ${
+        // pointerdown (tap-DOWN) not click (tap-UP): fires immediately and isn't
+        // cancelled by the :active scale on iOS. No `disabled` attr either — iOS
+        // drops the first tap on a button that just re-enabled (every goat turn),
+        // so we gate on `clickable` in the handler instead.
+        onPointerDown={clickable ? onTap : undefined}
+        aria-disabled={!clickable}
+        // No `transition-colors`: the recording color must SNAP in one paint, not
+        // animate (the ~150ms bg fade gets starved behind video decode on iOS).
+        // touch-manipulation kills the 350ms double-tap wait; will-change promotes
+        // the button to its own GPU layer so its repaint doesn't queue behind the
+        // looping video's main-thread decode.
+        className={`relative flex h-16 w-16 touch-manipulation select-none items-center justify-center rounded-full text-2xl shadow-xl will-change-transform ${
+          clickable ? "active:scale-90" : ""
+        } ${
           recording
             ? "bg-rose-500 text-white"
             : thinking
@@ -47,54 +56,30 @@ export function MicButton({
         }`}
         aria-label={label}
       >
-        {/* Pulsing ring when it's your turn */}
+        {/* Pulsing ring when it's your turn (CSS/GPU). */}
         {ready && (
-          <motion.span
-            className="absolute inset-0 rounded-full border-2 border-fk-yellow"
-            animate={{ scale: [1, 1.4], opacity: [0.7, 0] }}
-            transition={{ duration: 1.3, repeat: Infinity }}
-          />
+          <span className="absolute inset-0 animate-ping rounded-full border-2 border-fk-yellow" />
         )}
 
-        <AnimatePresence mode="wait">
-          {recording ? (
-            <motion.span
-              key="bars"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex items-end gap-[3px]"
-            >
-              {[0, 1, 2, 3].map((i) => (
-                <motion.span
-                  // scaleY (GPU transform) instead of height (layout reflow), so
-                  // the equalizer stays smooth on iOS while videos decode.
-                  key={i}
-                  className="block h-6 w-[3px] origin-bottom rounded-full bg-white"
-                  animate={{ scaleY: [0.25, 0.85, 0.4, 1, 0.25] }}
-                  transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.12 }}
-                />
-              ))}
-            </motion.span>
-          ) : thinking ? (
-            <motion.span
-              key="spin"
-              className="block h-6 w-6 rounded-full border-[3px] border-white/40 border-t-white"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-            />
-          ) : (
-            <motion.span
-              key="mic"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              🎤
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </motion.button>
+        {/* Icon is derived straight from the phase — no animation queue — so it
+            never lags behind the label (which mattered on iOS). */}
+        {recording ? (
+          <span className="flex items-end gap-[3px]">
+            {[0, 1, 2, 3].map((i) => (
+              <span
+                // Pure-CSS transform animation (compositor/GPU) — smooth on iOS.
+                key={i}
+                className="block h-6 w-[3px] origin-bottom rounded-full bg-white"
+                style={{ animation: `eq-bar 0.9s ease-in-out ${i * 0.12}s infinite` }}
+              />
+            ))}
+          </span>
+        ) : thinking ? (
+          <span className="block h-6 w-6 animate-spin rounded-full border-[3px] border-white/40 border-t-white" />
+        ) : (
+          <span>🎤</span>
+        )}
+      </button>
 
       <span className="rounded-full bg-black/30 px-3 py-1 text-xs font-medium text-white shadow backdrop-blur-sm">
         {label}

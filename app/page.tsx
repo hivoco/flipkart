@@ -218,15 +218,16 @@ export default function Home() {
     if (!recordingRef.current) return;
     recordingRef.current = false;
     setPhase("transcribing");
-    setGoatState("listen");
 
     // iOS/Safari: no real audio was captured — show the processing animation
     // briefly, then accept the reply as goat speech (skip Whisper/Groq entirely).
+    // Leave goatState idle (no GoatStage re-render → instant); audio's already cut.
     if (shouldFakeMic()) {
       schedule(acceptUserTurn, FAKE_PROCESS_MS);
       return;
     }
 
+    setGoatState("listen");
     const blob = await recorder.stop();
 
     // Mic captured no voice → nothing to evaluate → back to idle, your turn.
@@ -266,11 +267,13 @@ export default function Home() {
 
     // iOS/Safari: don't actually open the mic — just play the recording
     // animation. The reply is accepted as goat speech when they "send".
+    // We do NOT touch goatState here: on iOS "listen" maps to the idle clip
+    // anyway, so leaving the goat idle means GoatStage doesn't re-render on the
+    // tap — only the lightweight button does → the state flips instantly.
     if (shouldFakeMic()) {
       busyRef.current = false;
       recordingRef.current = true;
       setPhase("userRecording");
-      setGoatState("listen");
       schedule(() => void finishRecording(), RECORD_MAX_MS);
       return;
     }

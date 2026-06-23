@@ -25,4 +25,26 @@ body {
   color: #ffffff;
   font-family: var(--font-geist-sans), system-ui, Arial, sans-serif;
   overflow-x: hidden;
+  /* Kill iOS's native blue tap highlight so it can't flash/lag against our own
+     tap feedback (reads as delayed/doubled). */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mic-button equalizer bars. A pure-CSS transform animation runs on the
+   compositor (GPU), so it stays smooth on iOS even while videos decode —
+   unlike a JS/Framer animation, which competes for the main thread. */
+@keyframes eq-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  25% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.5);
+  }
+  75% {
+    transform: scaleY(0.9);
+  }
 }
