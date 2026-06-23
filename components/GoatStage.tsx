@@ -105,15 +105,21 @@ export function GoatStage({
             });
         }
       }
-      for (const src of AMBIENT) refs.current[src]?.play().catch(() => {});
-      refs.current[activeRef.current]?.play().catch(() => {});
+      // Only (re)start clips that actually fell paused — calling play() on a
+      // playing video every tap is wasted work that can stutter iOS.
+      for (const src of AMBIENT) {
+        const el = refs.current[src];
+        if (el?.paused) el.play().catch(() => {});
+      }
+      const active = refs.current[activeRef.current];
+      if (active?.paused) active.play().catch(() => {});
     };
     window.addEventListener("pointerdown", onGesture);
     return () => window.removeEventListener("pointerdown", onGesture);
   }, []);
 
-  // On a stage change: every clip restarts from the beginning when it becomes
-  // active (the underlay below hides the seek), unmute it if voiced, and keep
+  // On a stage change: VOICED clips restart from the beginning when they become
+  // active (the underlay hides the seek), unmute the active voiced clip, and keep
   // the PREVIOUS clip opaque underneath until the new one has fully faded in
   // (no flash). Hidden voiced clips pause afterwards; idle/listen never pause.
   useEffect(() => {
@@ -126,10 +132,15 @@ export function GoatStage({
     }
     const activeEl = refs.current[activeSrc];
     if (activeEl) {
-      try {
-        activeEl.currentTime = 0; // restart this clip from the start each turn
-      } catch {
-        /* not seekable yet */
+      // Only restart VOICED clips (each speak/laugh begins fresh). Seeking an
+      // ambient loop (idle/listen) to 0 forces a synchronous decode on iOS that
+      // hangs the main thread and lags the tap — and loops don't need it.
+      if (VOICED.has(activeSrc)) {
+        try {
+          activeEl.currentTime = 0;
+        } catch {
+          /* not seekable yet */
+        }
       }
       activeEl.play().catch(() => {});
     }
