@@ -54,6 +54,20 @@ function isWebKit(): boolean {
   return ios || safari;
 }
 
+// Mobile iOS specifically can't afford to switch the goat to the listen video on
+// the mic tap — that decode hangs the main thread and lags the animation. There
+// we just keep the already-playing idle clip (the mic button's equalizer is the
+// listening indicator). Desktop Safari is fast enough to use the real listen
+// video, so this branch is iOS-only.
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return (
+    /iP(hone|ad|od)/.test(ua) ||
+    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+  );
+}
+
 export function GoatStage({
   state,
   speakIndex,
@@ -61,8 +75,21 @@ export function GoatStage({
   state: GoatState;
   speakIndex: number;
 }) {
-  const activeSrc = clipFor(state, speakIndex);
   const [failed, setFailed] = useState(false);
+  // Resolved after mount (reads navigator) so SSR + first client render match.
+  const [ios, setIos] = useState(false);
+  useEffect(() => setIos(isIOS()), []);
+
+  // iOS: never switch to the listen video (its decode hangs the tap). Reuse the
+  // already-playing idle clip and overlay the listening indicator instead, so the
+  // mic tap changes NO video state — just the overlay.
+  const effectiveState: GoatState = ios && state === "listen" ? "idle" : state;
+  const activeSrc = clipFor(effectiveState, speakIndex);
+
+  // iOS doesn't even mount the listen clip (unused there → one fewer video to
+  // decode); every other platform renders all four for the crossfade.
+  const clips = ios ? ALL_CLIPS.filter((s) => s !== LISTEN_SRC) : ALL_CLIPS;
+
   // The previous clip, kept fully opaque UNDER the fading-in one so there's no
   // mid-crossfade dip/flash.
   const [underSrc, setUnderSrc] = useState<string | null>(null);
@@ -80,10 +107,8 @@ export function GoatStage({
       }
     }
     let blessed = false;
-    // Every tap is a user gesture. On the FIRST, unlock the voiced clips' audio.
-    // On EVERY tap, re-assert playback of the ambient loops + the active clip —
-    // iOS Safari quietly drops muted-video playback and only lets it resume
-    // inside a gesture, which is why the listening clip can look frozen there.
+    // First gesture unlocks the voiced clips' audio. Every gesture also nudges the
+    // active clip back to playing if iOS paused it (cheap; skips already-playing).
     const onGesture = () => {
       if (!blessed) {
         blessed = true;
@@ -105,12 +130,6 @@ export function GoatStage({
             });
         }
       }
-      // Only (re)start clips that actually fell paused — calling play() on a
-      // playing video every tap is wasted work that can stutter iOS.
-      for (const src of AMBIENT) {
-        const el = refs.current[src];
-        if (el?.paused) el.play().catch(() => {});
-      }
       const active = refs.current[activeRef.current];
       if (active?.paused) active.play().catch(() => {});
     };
@@ -120,8 +139,8 @@ export function GoatStage({
 
   // On a stage change: VOICED clips restart from the beginning when they become
   // active (the underlay hides the seek), unmute the active voiced clip, and keep
-  // the PREVIOUS clip opaque underneath until the new one has fully faded in
-  // (no flash). Hidden voiced clips pause afterwards; idle/listen never pause.
+  // the PREVIOUS clip opaque underneath until the new one has fully faded in.
+  // (idle↔listen on iOS maps to the SAME src, so the mic tap never runs this.)
   useEffect(() => {
     const prev = activeRef.current;
     activeRef.current = activeSrc;
@@ -133,8 +152,7 @@ export function GoatStage({
     const activeEl = refs.current[activeSrc];
     if (activeEl) {
       // Only restart VOICED clips (each speak/laugh begins fresh). Seeking an
-      // ambient loop (idle/listen) to 0 forces a synchronous decode on iOS that
-      // hangs the main thread and lags the tap — and loops don't need it.
+      // ambient loop to 0 forces a synchronous decode on iOS that lags the tap.
       if (VOICED.has(activeSrc)) {
         try {
           activeEl.currentTime = 0;
@@ -143,17 +161,6 @@ export function GoatStage({
         }
       }
       activeEl.play().catch(() => {});
-    }
-
-    // While idle/listening (not speaking), keep BOTH ambient loops decoded and
-    // running. iOS pauses hidden videos, so otherwise the mic tap has to play the
-    // listen clip from paused — a synchronous decode that hangs the tap. Warming
-    // it here (before the tap) makes the swap just an opacity flip.
-    if (!VOICED.has(activeSrc)) {
-      for (const src of AMBIENT) {
-        const el = refs.current[src];
-        if (el?.paused) el.play().catch(() => {});
-      }
     }
 
     if (prev !== activeSrc) {
@@ -198,7 +205,7 @@ export function GoatStage({
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl ring-1 ring-white/10">
-      {ALL_CLIPS.map((src) => {
+      {clips.map((src) => {
         const isActive = src === activeSrc;
         const isUnder = !isActive && src === underSrc;
         // Active fades in on top; the underlay stays solid beneath it; the rest
