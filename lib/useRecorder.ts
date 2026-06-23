@@ -1,21 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import type RecordRTCType from "recordrtc";
 
-// Thin wrapper around getUserMedia + MediaRecorder.
+// Voice recorder built on RecordRTC's StereoAudioRecorder (Web Audio API) rather
+// than the browser MediaRecorder. iOS Safari's MediaRecorder is unreliable
+// (limited codecs, empty blobs, AudioContext gesture quirks); RecordRTC records
+// straight off the audio graph and outputs a WAV blob that Whisper accepts.
+//
 // start() asks for the mic and begins recording; stop() returns the recorded
 // audio Blob (or null if nothing was captured / the mic was unavailable).
 
 export function useRecorder() {
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const recorderRef = useRef<RecordRTCType | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const cleanup = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    try {
+      recorderRef.current?.destroy();
+    } catch {
+      /* already torn down */
+    }
     recorderRef.current = null;
-    chunksRef.current = [];
   }, []);
 
   const start = useCallback(async (): Promise<boolean> => {
@@ -25,12 +33,17 @@ export function useRecorder() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      chunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      recorder.start();
+      // Loaded on demand so RecordRTC (which touches window) never runs on the
+      // server during SSR of this client component.
+      const RecordRTC = (await import("recordrtc")).default;
+      const recorder = new RecordRTC(stream, {
+        type: "audio",
+        mimeType: "audio/wav",
+        recorderType: RecordRTC.StereoAudioRecorder,
+        numberOfAudioChannels: 1, // mono is plenty for speech + smaller uploads
+        desiredSampRate: 16000, // Whisper runs at 16kHz; keeps the WAV small
+      });
+      recorder.startRecording();
       recorderRef.current = recorder;
       return true;
     } catch {
@@ -42,18 +55,16 @@ export function useRecorder() {
   const stop = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
       const recorder = recorderRef.current;
-      if (!recorder || recorder.state === "inactive") {
+      if (!recorder) {
         cleanup();
         resolve(null);
         return;
       }
-      recorder.onstop = () => {
-        const type = recorder.mimeType || "audio/webm";
-        const blob = new Blob(chunksRef.current, { type });
+      recorder.stopRecording(() => {
+        const blob = recorder.getBlob();
         cleanup();
-        resolve(blob.size > 0 ? blob : null);
-      };
-      recorder.stop();
+        resolve(blob && blob.size > 0 ? blob : null);
+      });
     });
   }, [cleanup]);
 

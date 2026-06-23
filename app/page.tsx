@@ -213,7 +213,7 @@ export default function Home() {
     let isGoat = true; // default: accept on any failure, to keep the flow alive
     try {
       const fd = new FormData();
-      fd.append("audio", blob, "speech.webm");
+      fd.append("audio", blob, "speech.wav");
       const controller = new AbortController();
       const to = setTimeout(() => controller.abort(), 15000);
       const res = await fetch("/api/transcribe", {
