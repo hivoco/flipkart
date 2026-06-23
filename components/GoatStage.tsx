@@ -63,27 +63,37 @@ export function GoatStage({
         el.play().catch(() => {});
       }
     }
-    const bless = () => {
-      for (const src of VOICED) {
-        const el = refs.current[src];
-        if (!el) continue;
-        el.muted = false;
-        el.volume = 0;
-        el
-          .play()
-          .then(() => {
-            el.volume = 1;
-            const stillActive = src === activeRef.current;
-            el.muted = !stillActive;
-            if (!stillActive) el.pause();
-          })
-          .catch(() => {
-            el.muted = src !== activeRef.current;
-          });
+    let blessed = false;
+    // Every tap is a user gesture. On the FIRST, unlock the voiced clips' audio.
+    // On EVERY tap, re-assert playback of the ambient loops + the active clip —
+    // iOS Safari quietly drops muted-video playback and only lets it resume
+    // inside a gesture, which is why the listening clip can look frozen there.
+    const onGesture = () => {
+      if (!blessed) {
+        blessed = true;
+        for (const src of VOICED) {
+          const el = refs.current[src];
+          if (!el) continue;
+          el.muted = false;
+          el.volume = 0;
+          el
+            .play()
+            .then(() => {
+              el.volume = 1;
+              const stillActive = src === activeRef.current;
+              el.muted = !stillActive;
+              if (!stillActive) el.pause();
+            })
+            .catch(() => {
+              el.muted = src !== activeRef.current;
+            });
+        }
       }
+      for (const src of AMBIENT) refs.current[src]?.play().catch(() => {});
+      refs.current[activeRef.current]?.play().catch(() => {});
     };
-    window.addEventListener("pointerdown", bless, { once: true });
-    return () => window.removeEventListener("pointerdown", bless);
+    window.addEventListener("pointerdown", onGesture);
+    return () => window.removeEventListener("pointerdown", onGesture);
   }, []);
 
   // On a stage change: every clip restarts from the beginning when it becomes

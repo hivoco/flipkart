@@ -28,6 +28,28 @@ const GoatStage = dynamic(
 let messageId = 0;
 const nextId = () => `m${++messageId}`;
 
+// WebKit's mic + audio-session handling is too unreliable, so on iOS AND on
+// Safari (desktop included) we fake the mic: play the recording animation but
+// never open getUserMedia or call Groq — the reply is always accepted as goat
+// speech. Chrome/Firefox/Edge keep the real mic + speech check.
+const shouldFakeMic = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  // iOS (iPadOS 13+ reports as "Macintosh" with touch).
+  const isIOS =
+    /iP(hone|ad|od)/.test(ua) ||
+    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  // Safari = has "Safari" but isn't another engine wearing Safari's UA string.
+  const isSafari =
+    /Safari/.test(ua) &&
+    !/Chrome|Chromium|CriOS|FxiOS|Edg|EdgiOS|OPR|OPiOS|Android/.test(ua);
+  return isIOS || isSafari;
+};
+
+// On iOS the fake "send" shows the processing animation this long before the
+// goat reacts (mimics the real transcribe round-trip).
+const FAKE_PROCESS_MS = 700;
+
 const RECORD_MAX_MS = 7000; // auto-stop safety net
 // How long the goat speaks / laughs (clip + audio cut here, then crossfades).
 const SPEAK_MS = 4000;
@@ -196,6 +218,14 @@ export default function Home() {
     if (!recordingRef.current) return;
     recordingRef.current = false;
     setPhase("transcribing");
+    setGoatState("listen");
+
+    // iOS/Safari: no real audio was captured — show the processing animation
+    // briefly, then accept the reply as goat speech (skip Whisper/Groq entirely).
+    if (shouldFakeMic()) {
+      schedule(acceptUserTurn, FAKE_PROCESS_MS);
+      return;
+    }
 
     const blob = await recorder.stop();
 
@@ -207,13 +237,10 @@ export default function Home() {
     }
 
     // We have a voice → stay "listening" while we transcribe + evaluate it.
-    // (The goat only leaves the listening pose once it reacts: speak/laugh.)
-    setGoatState("listen");
-
     let isGoat = true; // default: accept on any failure, to keep the flow alive
     try {
       const fd = new FormData();
-      fd.append("audio", blob, "speech.wav");
+      fd.append("audio", blob, "speech.webm");
       const controller = new AbortController();
       const to = setTimeout(() => controller.abort(), 15000);
       const res = await fetch("/api/transcribe", {
@@ -236,6 +263,18 @@ export default function Home() {
   const beginRecording = async () => {
     if (busyRef.current) return;
     busyRef.current = true;
+
+    // iOS/Safari: don't actually open the mic — just play the recording
+    // animation. The reply is accepted as goat speech when they "send".
+    if (shouldFakeMic()) {
+      busyRef.current = false;
+      recordingRef.current = true;
+      setPhase("userRecording");
+      setGoatState("listen");
+      schedule(() => void finishRecording(), RECORD_MAX_MS);
+      return;
+    }
+
     const ok = await recorder.start();
     busyRef.current = false;
     if (!ok) {
